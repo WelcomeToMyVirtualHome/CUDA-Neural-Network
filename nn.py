@@ -1,4 +1,5 @@
 import numpy as np
+from data import *
 
 class BCE:
 	def cost(self, predictions, target):
@@ -34,3 +35,18 @@ class NeuralNetwork:
 		for layer in self.layers:
 			if name == layer.name:
 				return layer
+
+	def train(self, data, epochs = 400, log = False, cuda = False):
+		for i in range(0,epochs):
+			cost = 0
+			for batch in data:
+				Y_hat = self.forward(batch["x"])
+				self.backprop(Y_hat, batch["y"])
+				cost += self.bce.cost(Y_hat, batch["y"])
+			if log:
+				print("Epoch={:d}, cost={:.2f}".format(i,cost))
+
+	def predict(self, data):
+		Y_hat = self.forward(data["x"])
+		acc = np.sum(to_label(Y_hat) == data["y"])/len(data["y"])
+		return Y_hat, acc

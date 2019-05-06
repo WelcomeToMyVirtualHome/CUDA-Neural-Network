@@ -1,6 +1,11 @@
 import numpy as np
 from numba import cuda
 
+"""
+TODO
+cuda implementation - flattening matrices for cuda threads/different cuda matrix multiplication logic
+"""
+
 class Layer:
 	def __init__(self, name):
 		self.name = name
@@ -21,15 +26,17 @@ class SigmoidLayer(Layer):
 	def sigmoid(self, x):
 		return 1./(1+np.exp(-x))
 
-	def cuda_activation_forward(self, Z, A):
+	def activation_forward_cuda(self):
 		index = cuda.blockId.x * cuda.blockDim.x + cuda.threadId.x
-		if index < Z.shape[0] * Z.shape[1]:
-			A[index] = self.sigmoid(Z[index])
+		if index < self.Z.shape[0] * self.Z.shape[1]:
+			self.A[index] = self.sigmoid(Z[index])
+		self.dA = dA
 
-	def cuda_activation_backprop(self, Z, A, dZ):
+	def activation_backprop_cuda(self):
 		index = cuda.blockId.x * cuda.blockDim.x + cuda.threadId.x
-		if index < dZ.shape[0] * dZ.shape[1]:
-			dZ[index] = dA[index] * self.sigmoid(Z[index]) * (1 - self.sigmoid(Z[index]))
+		if index < self.dZ.shape[0] * self.dZ.shape[1]:
+			dZ[index] = self.dA[index] * self.sigmoid(Z[index]) * (1 - self.sigmoid(Z[index]))
+		self.dZ = dZ
 
 	def activation_forward(self):
 		self.A = self.sigmoid(self.Z)
@@ -40,7 +47,7 @@ class SigmoidLayer(Layer):
 	def forward(self, Z, cuda = False):
 		self.Z = Z
 		if cuda:
-			pass
+			self.activation_forward_cuda()
 		else:
 			self.activation_forward()
 		return self.A
@@ -48,7 +55,7 @@ class SigmoidLayer(Layer):
 	def backprop(self, dA, cuda = False):
 		self.dA = dA
 		if cuda:
-			pass
+			self.activation_backprop_cuda()
 		else:
 			self.activation_backprop()
 		return self.dZ	
@@ -60,6 +67,19 @@ class ReLULayer(Layer):
 	def __init__(self, name):
 		super().__init__(name)
 	
+	def activation_forward_cuda(self):
+		index = cuda.blockId.x * cuda.blockDim.x + cuda.threadId.x
+		if index < self.A.shape[0] * self.A.shape[1]:
+			self.A[index] = np.max(self.Z[index],0)
+
+	def activation_backprop_cuda(self):
+		index = cuda.blockId.x * cuda.blockDim.x + cuda.threadId.x
+		if index < self.A.shape[0] * self.A.shape[1]:
+			if self.Z[index] > 0:
+				self.dZ[index] = self.dA[index]
+			else:
+				self.dZ[index] = 0
+
 	def activation_forward(self):
 		self.A = np.copy(self.Z)
 		self.A[self.A <= 0] = 0
@@ -71,7 +91,7 @@ class ReLULayer(Layer):
 	def forward(self, Z ,cuda = False):
 		self.Z = Z
 		if cuda:
-			pass
+			self.activation_forward_cuda()
 		else:
 			self.activation_forward()
 		return self.A
@@ -79,7 +99,7 @@ class ReLULayer(Layer):
 	def backprop(self, dA, cuda = False):
 		self.dA = dA
 		if cuda:
-			pass
+			self.activation_backprop_cuda()
 		else:
 			self.activation_backprop()
 		return self.dZ
@@ -98,6 +118,32 @@ class LinearLayer(Layer):
 		self.W = np.random.normal(loc=0.0, scale=1, size=(self.input_size,self.output_size))
 		self.b = np.random.normal(loc=0.0, scale=1, size=self.output_size)
 	
+	def activation_forward_cuda(self, A):
+		row = cuda.blockIdx.y * cuda.blockDim.y + cuda.threadIdx.y
+		col = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
+
+		Z_x_dim = self.A.shape[0]
+		Z_y_dim = self.W.shape[1]
+
+		Z_value = 0;
+		if row < Z_y_dim and col < Z_x_dim:
+			for i in range(0, self.W.shape[0]):
+				Z_value += W[row * self.W.shape[0] + i] * A[i * A.shape[0] + col]
+			Z[row * Z_x_dim + col] = Z_value + b[row]
+
+	def activation_backprop_cuda(self):
+		row = cuda.blockIdx.y * cuda.blockDim.y + cuda.threadIdx.y
+		col = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
+		dA_x_dim = dZ_x_dim
+		dA_y_dim = W_x_dim
+
+		dA_value = 0.0
+
+		if row < dA_y_dim and col < dA_x_dim:
+			for i in range(0,W_y_dim):
+				dA_value += W[i * W_x_dim + row] * dZ[i * dZ_x_dim + col]
+			dA[row * dA_x_dim + col] = dA_value;
+
 	def activation_forward(self, A):
 		return np.matmul(self.A, self.W) + self.b
 
@@ -114,13 +160,16 @@ class LinearLayer(Layer):
 	def forward(self, A ,cuda = False):
 		self.A = A
 		if cuda:
-			pass
+			return self.activation_forward_cuda()
 		else:
 			return self.activation_forward(A)
 			
 	def backprop(self, dZ, cuda = False):
 		if cuda:
-			pass
+			self.update_bias(dZ)
+			dZout = self.activation_backprop_cuda(dZ)
+			self.update_weights(dZ)
+			return dZout
 		else:
 			self.update_bias(dZ)
 			dZout = self.activation_backprop(dZ)	

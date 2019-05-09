@@ -20,15 +20,15 @@ class NeuralNetwork:
 		for layer in self.layers:
 			layer.reset()
 
-	def forward(self, Z):
+	def forward(self, Z, cuda = False):
 		for layer in self.layers:
-			Z = layer.forward(Z)
+			Z = layer.forward(Z, cuda)
 		return Z
 
-	def backprop(self, predictions, target):
+	def backprop(self, predictions, target, cuda = False):
 		error = self.bce.d_cost(predictions, target)
 		for layer in self.layers[::-1]:
-			error = layer.backprop(error)
+			error = layer.backprop(error, cuda)
 		return error
 
 	def get_layer(self, name):
@@ -40,8 +40,8 @@ class NeuralNetwork:
 		for i in range(0,epochs):
 			cost = 0
 			for batch in data:
-				Y_hat = self.forward(batch["x"])
-				self.backprop(Y_hat, batch["y"])
+				Y_hat = self.forward(batch["x"], cuda)
+				self.backprop(Y_hat, batch["y"], cuda)
 				cost += self.bce.cost(Y_hat, batch["y"])
 			if log:
 				print("Epoch={:d}, cost={:.2f}".format(i,cost))

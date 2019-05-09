@@ -3,7 +3,7 @@ from numba import cuda
 
 """
 TODO
-cuda implementation - flattening matrices for cuda threads/different cuda matrix multiplication logic
+cuda implementation
 """
 
 class Layer:
@@ -26,17 +26,21 @@ class SigmoidLayer(Layer):
 	def sigmoid(self, x):
 		return 1./(1+np.exp(-x))
 
-	def activation_forward_cuda(self):
-		index = cuda.blockId.x * cuda.blockDim.x + cuda.threadId.x
-		if index < self.Z.shape[0] * self.Z.shape[1]:
-			self.A[index] = self.sigmoid(Z[index])
-		self.dA = dA
+	@cuda.jit
+	def activation_forward_cuda(self, Z, A):
+		index = cuda.grid(1)
+		pass
 
+	def activation_forward_cuda_wrapper(self):
+		pass
+
+	@cuda.jit
 	def activation_backprop_cuda(self):
-		index = cuda.blockId.x * cuda.blockDim.x + cuda.threadId.x
-		if index < self.dZ.shape[0] * self.dZ.shape[1]:
-			dZ[index] = self.dA[index] * self.sigmoid(Z[index]) * (1 - self.sigmoid(Z[index]))
-		self.dZ = dZ
+		index = cuda.grid(1)
+		pass
+	
+	def activation_backprop_cuda_wrapper(self):
+		pass
 
 	def activation_forward(self):
 		self.A = self.sigmoid(self.Z)
@@ -47,7 +51,7 @@ class SigmoidLayer(Layer):
 	def forward(self, Z, cuda = False):
 		self.Z = Z
 		if cuda:
-			self.activation_forward_cuda()
+			self.activation_forward_cuda_wrapper()
 		else:
 			self.activation_forward()
 		return self.A
@@ -55,7 +59,7 @@ class SigmoidLayer(Layer):
 	def backprop(self, dA, cuda = False):
 		self.dA = dA
 		if cuda:
-			self.activation_backprop_cuda()
+			self.activation_backprop_cuda_wrapper()
 		else:
 			self.activation_backprop()
 		return self.dZ	
@@ -67,18 +71,21 @@ class ReLULayer(Layer):
 	def __init__(self, name):
 		super().__init__(name)
 	
+	@cuda.jit
 	def activation_forward_cuda(self):
-		index = cuda.blockId.x * cuda.blockDim.x + cuda.threadId.x
-		if index < self.A.shape[0] * self.A.shape[1]:
-			self.A[index] = np.max(self.Z[index],0)
+		cuda.grid(1)
+		pass
 
+	def activation_forward_cuda_wrapper(self):
+		pass
+
+	@cuda.jit
 	def activation_backprop_cuda(self):
-		index = cuda.blockId.x * cuda.blockDim.x + cuda.threadId.x
-		if index < self.A.shape[0] * self.A.shape[1]:
-			if self.Z[index] > 0:
-				self.dZ[index] = self.dA[index]
-			else:
-				self.dZ[index] = 0
+		cuda.grid(1)
+		pass
+
+	def activation_backprop_cuda_wrapper(self):
+		pass
 
 	def activation_forward(self):
 		self.A = np.copy(self.Z)
@@ -91,7 +98,7 @@ class ReLULayer(Layer):
 	def forward(self, Z ,cuda = False):
 		self.Z = Z
 		if cuda:
-			self.activation_forward_cuda()
+			self.activation_forward_cuda_wrapper()
 		else:
 			self.activation_forward()
 		return self.A
@@ -99,7 +106,7 @@ class ReLULayer(Layer):
 	def backprop(self, dA, cuda = False):
 		self.dA = dA
 		if cuda:
-			self.activation_backprop_cuda()
+			self.activation_backprop_cuda_wrapper()
 		else:
 			self.activation_backprop()
 		return self.dZ
@@ -118,31 +125,25 @@ class LinearLayer(Layer):
 		self.W = np.random.normal(loc=0.0, scale=1, size=(self.input_size,self.output_size))
 		self.b = np.random.normal(loc=0.0, scale=1, size=self.output_size)
 	
+	@cuda.jit
 	def activation_forward_cuda(self, A):
-		row = cuda.blockIdx.y * cuda.blockDim.y + cuda.threadIdx.y
-		col = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
+		row, col = cuda.grid(2)
+		pass
 
-		Z_x_dim = self.A.shape[0]
-		Z_y_dim = self.W.shape[1]
+	def activation_forward_cuda_wrapper(self, A):
+		pass
 
-		Z_value = 0;
-		if row < Z_y_dim and col < Z_x_dim:
-			for i in range(0, self.W.shape[0]):
-				Z_value += W[row * self.W.shape[0] + i] * A[i * A.shape[0] + col]
-			Z[row * Z_x_dim + col] = Z_value + b[row]
+	@cuda.jit
+	def activation_backprop_cuda(self, dZ):
+		row, col = cuda.grid(2)
+	
+		pass
 
-	def activation_backprop_cuda(self):
-		row = cuda.blockIdx.y * cuda.blockDim.y + cuda.threadIdx.y
-		col = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
-		dA_x_dim = dZ_x_dim
-		dA_y_dim = W_x_dim
-
-		dA_value = 0.0
-
-		if row < dA_y_dim and col < dA_x_dim:
-			for i in range(0,W_y_dim):
-				dA_value += W[i * W_x_dim + row] * dZ[i * dZ_x_dim + col]
-			dA[row * dA_x_dim + col] = dA_value;
+	def activation_backprop_cuda_wrapper(self, dZ):
+		griddim = 1, 1
+		blockdim = 10, 10
+		
+		pass
 
 	def activation_forward(self, A):
 		return np.matmul(self.A, self.W) + self.b
@@ -157,17 +158,17 @@ class LinearLayer(Layer):
 	def update_bias(self, dZ):
 		self.b -= self.learning_rate * np.sum(dZ, axis=0) / dZ.shape[0] 
 
-	def forward(self, A ,cuda = False):
+	def forward(self, A, cuda = False):
 		self.A = A
 		if cuda:
-			return self.activation_forward_cuda()
+			return self.activation_forward_cuda_wrapper(A)
 		else:
 			return self.activation_forward(A)
 			
 	def backprop(self, dZ, cuda = False):
 		if cuda:
 			self.update_bias(dZ)
-			dZout = self.activation_backprop_cuda(dZ)
+			dZout = self.activation_backprop_cuda_wrapper(dZ)
 			self.update_weights(dZ)
 			return dZout
 		else:

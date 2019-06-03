@@ -9,9 +9,10 @@ class BCE:
 		return -(target/predictions - (1-target)/(1-predictions))
 	
 class NeuralNetwork:
-	def __init__(self):
+	def __init__(self, cuda=False):
 		self.layers = list()
 		self.bce = BCE()
+		self.cuda = cuda
 
 	def addLayer(self,layer):
 		self.layers.append(layer)
@@ -20,15 +21,15 @@ class NeuralNetwork:
 		for layer in self.layers:
 			layer.reset()
 
-	def forward(self, Z, cuda = False):
+	def forward(self, Z):
 		for layer in self.layers:
-			Z = layer.forward(Z, cuda)
+			Z = layer.forward(Z, self.cuda)
 		return Z
 
-	def backprop(self, predictions, target, cuda = False):
+	def backprop(self, predictions, target):
 		error = self.bce.d_cost(predictions, target)
 		for layer in self.layers[::-1]:
-			error = layer.backprop(error, cuda)
+			error = layer.backprop(error, self.cuda)
 		return error
 
 	def get_layer(self, name):
@@ -36,12 +37,12 @@ class NeuralNetwork:
 			if name == layer.name:
 				return layer
 
-	def train(self, data, epochs = 400, log = False, cuda = False):
+	def train(self, data, epochs = 400, log = False):
 		for i in range(0,epochs):
 			cost = 0
 			for batch in data:
-				Y_hat = self.forward(batch["x"], cuda)
-				self.backprop(Y_hat, batch["y"], cuda)
+				Y_hat = self.forward(batch["x"])
+				self.backprop(Y_hat, batch["y"])
 				cost += self.bce.cost(Y_hat, batch["y"])
 			if log:
 				print("Epoch={:d}, cost={:.2f}".format(i,cost))

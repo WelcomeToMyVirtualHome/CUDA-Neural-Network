@@ -3,6 +3,7 @@ from layer import *
 
 size = 8
 a = b = c = np.random.random((size,size))
+d = np.random.random(size)
 out = np.zeros((size,size), dtype=np.float32)
 
 block = (4, 4)
@@ -30,15 +31,15 @@ print("ReLU forward check = {:}".format(np.allclose(out, out_n, rtol=rtol)))
 
 relu_activation_backprop[block, grid](a, b, out)
 out_n = relu.backprop(a)
-print("ReLU forward check = {:}".format(np.allclose(out, out_n, rtol=rtol)))
+print("ReLU backprop check = {:}".format(np.allclose(out, out_n, rtol=rtol)))
 
 linear = LinearLayer("Linear", size, size)
 linear.W = b
-linear.b = c
-linear_activation_forward[block, grid](a, b, c, out)
+linear.b = d
+linear_activation_forward[block, grid](a, b, d, out)
 out_n = linear.forward(a)
 print("Linear forward check = {:}".format(np.allclose(out, out_n, rtol=rtol)))
 
-linear_activation_backprop[block, grid](a, b, out)
-out_n = linear.backprop(a)
-print("Linear forward check = {:}".format(np.allclose(out, out_n, rtol=rtol)))
+#linear_activation_backprop[block, grid](a, b, out)
+#out_n = linear.backprop(a)
+#print("Linear backprop check = {:}".format(np.allclose(out, out_n, rtol=rtol)))

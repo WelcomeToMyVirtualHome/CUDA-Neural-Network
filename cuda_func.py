@@ -1,9 +1,16 @@
-from numba import cuda, vectorize
+from numba import cuda, vectorize,  float32
 import math
 
 @cuda.jit
 def sigmoid_activation_forward(Z, out):
-    i, j = cuda.grid(2)
+    tx = cuda.threadIdx.x
+    ty = cuda.threadIdx.y
+    bx = cuda.blockIdx.x
+    by = cuda.blockIdx.y
+    bw = cuda.blockDim.x
+    bh = cuda.blockDim.y
+    i = tx + bx * bw
+    j = ty + by * bh
     ny, nx = Z.shape
     if i >= ny and j >= nx:
         return
@@ -11,7 +18,14 @@ def sigmoid_activation_forward(Z, out):
     
 @cuda.jit
 def sigmoid_activation_backprop(Z, dA, out):
-    i, j = cuda.grid(2)
+    tx = cuda.threadIdx.x
+    ty = cuda.threadIdx.y
+    bx = cuda.blockIdx.x
+    by = cuda.blockIdx.y
+    bw = cuda.blockDim.x
+    bh = cuda.blockDim.y
+    i = tx + bx * bw
+    j = ty + by * bh
     ny, nx = Z.shape
     if i >= ny and j >= nx:
         return
@@ -19,7 +33,14 @@ def sigmoid_activation_backprop(Z, dA, out):
 
 @cuda.jit
 def relu_activation_forward(A, out):
-    i, j = cuda.grid(2)
+    tx = cuda.threadIdx.x
+    ty = cuda.threadIdx.y
+    bx = cuda.blockIdx.x
+    by = cuda.blockIdx.y
+    bw = cuda.blockDim.x
+    bh = cuda.blockDim.y
+    i = tx + bx * bw
+    j = ty + by * bh
     ny, nx = A.shape
     if i >= ny and j >= nx:
         return
@@ -30,7 +51,14 @@ def relu_activation_forward(A, out):
 
 @cuda.jit
 def relu_activation_backprop(Z, dA, out):
-    i, j = cuda.grid(2)
+    tx = cuda.threadIdx.x
+    ty = cuda.threadIdx.y
+    bx = cuda.blockIdx.x
+    by = cuda.blockIdx.y
+    bw = cuda.blockDim.x
+    bh = cuda.blockDim.y
+    i = tx + bx * bw
+    j = ty + by * bh
     ny, nx = Z.shape
     if i >= ny and j >= nx:
         return
@@ -39,7 +67,14 @@ def relu_activation_backprop(Z, dA, out):
 
 @cuda.jit
 def linear_activation_forward(A, W, b, out):
-    i, j = cuda.grid(2)
+    tx = cuda.threadIdx.x
+    ty = cuda.threadIdx.y
+    bx = cuda.blockIdx.x
+    by = cuda.blockIdx.y
+    bw = cuda.blockDim.x
+    bh = cuda.blockDim.y
+    i = tx + bx * bw
+    j = ty + by * bh
     ny, nx = W.shape
     if i >= ny and j >= nx:
         return
@@ -51,15 +86,38 @@ def linear_activation_forward(A, W, b, out):
 
 @cuda.jit
 def linear_activation_backprop(dZ, W, out):
-    pass
+    tx = cuda.threadIdx.x
+    ty = cuda.threadIdx.y
+    bx = cuda.blockIdx.x
+    by = cuda.blockIdx.y
+    bw = cuda.blockDim.x
+    bh = cuda.blockDim.y
+    i = tx + bx * bw
+    j = ty + by * bh
+    nx, ny = W.shape
+    if i >= ny and j >= nx:
+        return
+    tmp = 0.
+    # switched indices j <-> k in W
+    for k in range(dZ.shape[1]):
+        tmp += dZ[i, k] * W[j, k]
+    out[i, j] = tmp
+    
     
 #Threads per block
-TPB = 16
+TPB = 8
 @cuda.jit
 def fast_matmul(A, B, C):
     sA = cuda.shared.array(shape=(TPB, TPB), dtype=float32)
     sB = cuda.shared.array(shape=(TPB, TPB), dtype=float32)
-    x, y = cuda.grid(2)
+    tx = cuda.threadIdx.x
+    ty = cuda.threadIdx.y
+    bx = cuda.blockIdx.x
+    by = cuda.blockIdx.y
+    bw = cuda.blockDim.x
+    bh = cuda.blockDim.y
+    x = tx + bx * bw
+    y = ty + by * bh
     tx = cuda.threadIdx.x
     ty = cuda.threadIdx.y
     bpg = cuda.gridDim.x

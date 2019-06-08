@@ -11,6 +11,8 @@ class BCE:
 class NeuralNetwork:
 	def __init__(self, cuda=False):
 		self.layers = list()
+
+		#binary cross entropy
 		self.bce = BCE()
 		self.cuda = cuda
 

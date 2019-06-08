@@ -10,20 +10,20 @@ class Layer():
 		self.name = name
 
 	def forward(self, A, cuda = False):
-		raise NotImplemented
+		raise NotImplementedError
 
 	def backprop(self, dZ, cuda = False):
-		raise NotImplemented
+		raise NotImplementedError
 
 	def reset(self):
-		raise NotImplemented
+		raise NotImplementedError
 
 class SigmoidLayer(Layer):
 	def __init__(self, name):
 		super().__init__(name)
 
 	def activation_forward_cuda(self, Z):
-		block = (4, 4)
+		block = (8, 8)
 		grid = (Z.shape[0] // block[0] if Z.shape[0] % block[0] == 0 
             else Z.shape[0] // block[0] + 1,
         int(a.shape[0] // block[1] if Z.shape[1] % block[1] == 0 
@@ -33,7 +33,7 @@ class SigmoidLayer(Layer):
 		return out
 
 	def activation_backprop_cuda(self, dA):
-		block = (4, 4)
+		block = (8, 8)
 		grid = (dA.shape[0] // block[0] if dA.shape[0] % block[0] == 0 
             else dA.shape[0] // block[0] + 1,
         int(a.shape[0] // block[1] if dA.shape[1] % block[1] == 0 
@@ -69,7 +69,7 @@ class ReLULayer(Layer):
 		super().__init__(name)
 		
 	def activation_forward_cuda(self, Z):
-		block = (4, 4)
+		block = (8, 8)
 		grid = (Z.shape[0] // block[0] if Z.shape[0] % block[0] == 0 
             else Z.shape[0] // block[0] + 1,
         int(Z.shape[0] // block[1] if Z.shape[1] % block[1] == 0 
@@ -79,7 +79,7 @@ class ReLULayer(Layer):
 		return out
 
 	def activation_backprop_cuda(self, dA):
-		block = (4, 4)
+		block = (8, 8)
 		grid = (dA.shape[0] // block[0] if dA.shape[0] % block[0] == 0 
             else dA.shape[0] // block[0] + 1,
         int(dA.shape[0] // block[1] if dA.shape[1] % block[1] == 0 
@@ -137,13 +137,13 @@ class LinearLayer(Layer):
 		return out
 
 	def activation_backprop_cuda(self, Z):
-		block = (4, 4)
+		block = (8, 8)
 		grid = (Z.shape[0] // block[0] if Z.shape[0] % block[0] == 0 
             else Z.shape[0] // block[0] + 1,
         int(Z.shape[0] // block[1] if Z.shape[1] % block[1] == 0 
             else Z.shape[1] // block[1] + 1))
 	
-		out = np.zeros((Z.shape[0], self.W.shape[1]))
+		out = np.zeros((Z.shape[0], self.W.shape[0]))
 		linear_activation_backprop[block, grid](Z, self.W, out)
 		return out
 	
@@ -171,7 +171,7 @@ class LinearLayer(Layer):
 		if cuda:
 			self.update_bias(dZ)
 			dZout = self.activation_backprop_cuda(dZ)
-			#self.update_weights(dZ)
+			self.update_weights(dZ)
 			return dZout
 		else:
 			self.update_bias(dZ)

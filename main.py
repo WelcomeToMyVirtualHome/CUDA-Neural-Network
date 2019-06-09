@@ -37,9 +37,9 @@ if __name__ == '__main__':
 	#it initiates the matrices with random numbers (normal distribution)
 	nn.init_layers()
 
-	epochs = 20
+	epochs = 10
 	n_points = 200
-	n_batches = 50
+	n_batches = 20
 	
 	#data is a list (batches) of dictionaries (x and y arrays) 
 	data = [prepare_data(n_points) for i in range(0, n_batches)]

@@ -23,23 +23,24 @@ class SigmoidLayer(Layer):
 		super().__init__(name)
 
 	def activation_forward_cuda(self, Z):
-		block = (8, 8)
+		block = (4, 4)
 		grid = (Z.shape[0] // block[0] if Z.shape[0] % block[0] == 0 
             else Z.shape[0] // block[0] + 1,
-        int(a.shape[0] // block[1] if Z.shape[1] % block[1] == 0 
+        int(Z.shape[0] // block[1] if Z.shape[1] % block[1] == 0 
             else Z.shape[1] // block[1] + 1))
 		out = np.zeros(Z.shape)
 		sigmoid_activation_forward[block, grid](Z, out)
 		return out
 
 	def activation_backprop_cuda(self, dA):
-		block = (8, 8)
+		block = (4, 4)
 		grid = (dA.shape[0] // block[0] if dA.shape[0] % block[0] == 0 
             else dA.shape[0] // block[0] + 1,
-        int(a.shape[0] // block[1] if dA.shape[1] % block[1] == 0 
+        int(self.Z.shape[0] // block[1] if dA.shape[1] % block[1] == 0 
             else dA.shape[1] // block[1] + 1))
 		out = np.zeros(dA.shape)
-		sigmoid_activation_backprop[block, grid](dA, self.Z, out)
+		# sigmoid_activation_backprop[block, grid](dA, self.Z, out)
+		sigmoid_activation_backprop[block, grid](self.Z, dA, out)
 		return out
 
 	def activation_forward(self, Z):
@@ -69,7 +70,7 @@ class ReLULayer(Layer):
 		super().__init__(name)
 		
 	def activation_forward_cuda(self, Z):
-		block = (8, 8)
+		block = (4, 4)
 		grid = (Z.shape[0] // block[0] if Z.shape[0] % block[0] == 0 
             else Z.shape[0] // block[0] + 1,
         int(Z.shape[0] // block[1] if Z.shape[1] % block[1] == 0 
@@ -79,7 +80,7 @@ class ReLULayer(Layer):
 		return out
 
 	def activation_backprop_cuda(self, dA):
-		block = (8, 8)
+		block = (4, 4)
 		grid = (dA.shape[0] // block[0] if dA.shape[0] % block[0] == 0 
             else dA.shape[0] // block[0] + 1,
         int(dA.shape[0] // block[1] if dA.shape[1] % block[1] == 0 
@@ -134,10 +135,28 @@ class LinearLayer(Layer):
 
 		out = np.zeros((dA.shape[0], self.W.shape[1]))
 		linear_activation_forward[block, grid](dA, self.W, self.b, out)
+
+		# threadsperblock = (4, 4)
+		# blockspergrid_x = int(math.ceil(dA.shape[0] / threadsperblock[1]))
+	
+		# blockspergrid_y = int(math.ceil(self.W.shape[1] / threadsperblock[0]))
+		# blockspergrid = (blockspergrid_x, blockspergrid_y)
+
+		# out = np.zeros((dA.shape[0], self.W.shape[1]))
+
+		# dA_global_mem = cuda.to_device(dA)
+		# W_global_mem = cuda.to_device(self.W)
+		# out_global_mem = cuda.to_device(out)
+		# B_global_mem = cuda.to_device(self.b)
+
+		# linear_activation_forward[threadsperblock, blockspergrid](dA_global_mem,
+		# 							 W_global_mem, B_global_mem, out_global_mem)
+
+		# out = out_global_mem.copy_to_host()
 		return out
 
 	def activation_backprop_cuda(self, Z):
-		block = (8, 8)
+		block = (4, 4)
 		grid = (Z.shape[0] // block[0] if Z.shape[0] % block[0] == 0 
             else Z.shape[0] // block[0] + 1,
         int(Z.shape[0] // block[1] if Z.shape[1] % block[1] == 0 
@@ -145,12 +164,30 @@ class LinearLayer(Layer):
 	
 		out = np.zeros((Z.shape[0], self.W.shape[0]))
 		linear_activation_backprop[block, grid](Z, self.W, out)
+
+		# threadsperblock = (4, 4)
+		# blockspergrid_x = int(math.ceil(Z.shape[0] / threadsperblock[1]))
+		# #not sure here have to check later
+		# # blockspergrid_y = int(math.ceil(self.W.shape[1] / threadsperblock[0]))
+		# blockspergrid_y = int(math.ceil(self.W.shape[0] / threadsperblock[0]))
+		# blockspergrid = (blockspergrid_x, blockspergrid_y)
+
+		# #self.W.shape[0] means that we take into account the transpositoin
+		# out = np.zeros((Z.shape[0], self.W.shape[0]))
+
+		# Z_global_mem = cuda.to_device(Z)
+		# W_global_mem = cuda.to_device(self.W)
+		# out_global_mem = cuda.to_device(out)
+
+		# linear_activation_backprop[threadsperblock, blockspergrid](Z_global_mem, W_global_mem, out_global_mem)
+		# out = out_global_mem.copy_to_host()
 		return out
 	
 	def activation_forward(self, A):
 		return np.matmul(A, self.W) + self.b
 
 	def activation_backprop(self, dZ):
+
 		return np.matmul(dZ, np.transpose(self.W))
 
 	def update_weights(self, dZ):
@@ -162,6 +199,9 @@ class LinearLayer(Layer):
 
 	def forward(self, A, cuda = False):
 		self.A = A
+		
+		# if np.allclose(self.activation_forward_cuda(A), self.activation_forward(A), rtol=0.01):
+		# 	print("forward")
 		if cuda:
 			return self.activation_forward_cuda(A)
 		else:

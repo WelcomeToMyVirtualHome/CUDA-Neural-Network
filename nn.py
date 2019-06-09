@@ -32,6 +32,7 @@ class NeuralNetwork:
 		error = self.bce.d_cost(predictions, target)
 		for layer in self.layers[::-1]:
 			error = layer.backprop(error, self.cuda)
+			# error = layer.backprop(error, False)
 		return error
 
 	def get_layer(self, name):

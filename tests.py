@@ -20,7 +20,7 @@ def init_nn():
 	return nn
 
 def train_test(filename, nn, epochs, data, log = False, cuda = False):
-	cProfile.run('nn.train(data, epochs, False, False)', filename = filename)
+	cProfile.run('nn.train(data, epochs = epochs, log = True)', filename = filename)
 
 
 nn = init_nn()
@@ -29,7 +29,7 @@ n_points = 200
 n_batches = 50
 data = [prepare_data(n_points) for i in range(0, n_batches)]
 
-filename = 'stats'
+filename = 'stats.txt'
 train_test(filename, nn, epochs, data, log = False, cuda = False)
 
 
